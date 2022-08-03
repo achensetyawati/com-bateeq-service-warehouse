@@ -3,7 +3,11 @@ using Com.Bateeq.Service.Warehouse.Lib.Facades;
 using Com.Bateeq.Service.Warehouse.Lib.Facades.Stores;
 using Com.Bateeq.Service.Warehouse.Lib.Interfaces;
 using Com.Bateeq.Service.Warehouse.Lib.Models.InventoryModel;
+using Com.Bateeq.Service.Warehouse.Lib.Models.SPKDocsModel;
+using Com.Bateeq.Service.Warehouse.Lib.Models.TransferModel;
 using Com.Bateeq.Service.Warehouse.Lib.Services;
+using Com.Bateeq.Service.Warehouse.Test.DataUtils.ExpeditionDataUtils;
+using Com.Bateeq.Service.Warehouse.Test.DataUtils.InventoryDataUtils;
 using Com.Bateeq.Service.Warehouse.Test.DataUtils.SPKDocDataUtils;
 using Com.Bateeq.Service.Warehouse.Test.DataUtils.TransferDataUtils;
 using Microsoft.EntityFrameworkCore;
@@ -77,13 +81,76 @@ namespace Com.Bateeq.Service.Warehouse.Test.Facades.Stores.TransferInStoreFacade
             return new TransferDataUtil(facade, sPKDocDataUtil);
         }
 
+        private TransferInStoreDataUtil dataUtilTransfer(TransferFacade facade, string testName)
+        {
+            var pkbbjfacade = new Com.Bateeq.Service.Warehouse.Lib.Facades.PkpbjFacade(ServiceProvider, _dbContext(testName));
+            var expeditionfacade = new Com.Bateeq.Service.Warehouse.Lib.Facades.ExpeditionFacade(ServiceProvider, _dbContext(testName));
+            var inventoryfacade = new Com.Bateeq.Service.Warehouse.Lib.Facades.InventoryFacade(ServiceProvider, _dbContext(testName));
+
+            var sPKDocDataUtil = new SPKDocDataUtil(pkbbjfacade);
+            var inventoryDataUtil = new InventoryDataUtil(inventoryfacade, _dbContext(testName));
+            var expeditionDataUtil = new ExpeditionDataUtil(expeditionfacade, inventoryDataUtil, sPKDocDataUtil);
+
+            var transferFacade = new TransferFacade(ServiceProvider, _dbContext(testName));
+            //var transferDataUtil = new TransferDataUtil(transferFacade, sPKDocDataUtil);
+            var tranferInStore = new TransferInStoreDataUtil(transferFacade, expeditionDataUtil);
+
+            return new TransferInStoreDataUtil(facade, expeditionDataUtil);
+        }
+
+        private TransferInDoc TransInModel
+        {
+            get
+            {
+                return new TransferInDoc
+                {
+                    Code = "code",
+                    Date = DateTimeOffset.Now,
+                    DestinationId = 1,
+                    DestinationCode = "code",
+                    DestinationName = "name",
+                    Reference = "GDG.",
+                    SourceId = 1,
+                    SourceCode = "1",
+                    SourceName = "source",
+                    
+                };
+            }
+        }
+
+        private SPKDocs spkDocsModel
+        {
+            get
+            {
+                return new SPKDocs
+                {
+                    Code = "code",
+                    Date = DateTimeOffset.Now,
+                    DestinationId = 1,
+                    DestinationCode = "code",
+                    DestinationName = "name",
+                    IsDistributed = true,
+                    IsDraft = false,
+                    IsReceived = false,
+                    PackingList = "EFR-FN",
+                    Password = "1",
+                    Reference = "EFR-FN",
+                    SourceId = 1,
+                    SourceCode = "1",
+                    SourceName = "source",
+                    Weight = 0,
+                    FinishingOutIdentity = "00123"
+                };
+            }
+        }
+
         [Fact]
         public async Task Should_Success_Create_Data()
         {
 
             TransferFacade facade = new TransferFacade(GetServiceProvider().Object, _dbContext(GetCurrentMethod()));
             TransferInStoreFacade facadestore = new TransferInStoreFacade(GetServiceProvider().Object, _dbContext(GetCurrentMethod()));
-            var model = await dataUtil(facade, GetCurrentMethod()).GetNewData();
+            var model = await dataUtilTransfer(facade, GetCurrentMethod()).GetNewData();
             var Response = await facadestore.Create(model, USERNAME);
             Assert.NotEqual(0, Response);
         }
@@ -120,14 +187,13 @@ namespace Com.Bateeq.Service.Warehouse.Test.Facades.Stores.TransferInStoreFacade
 
             TransferFacade facade = new TransferFacade(GetServiceProvider().Object, _dbContext(GetCurrentMethod()));
             TransferInStoreFacade facadestore = new TransferInStoreFacade(GetServiceProvider().Object, _dbContext(GetCurrentMethod()));
-            var model = await dataUtil(facade, GetCurrentMethod()).GetNewData();
+            var model = await dataUtilTransfer(facade, GetCurrentMethod()).GetNewData();
             model.DestinationId = inventory.StorageId;
             model.DestinationName = inventory.StorageName;
             model.DestinationCode = inventory.StorageCode;
             foreach (var item in model.Items)
             {
                 item.ItemId = inventory.ItemId;
-
             }
             var Response = await facadestore.Create(model, USERNAME);
             Assert.NotEqual(0, Response);
@@ -135,22 +201,38 @@ namespace Com.Bateeq.Service.Warehouse.Test.Facades.Stores.TransferInStoreFacade
         [Fact]
         public async Task Should_Success_Get_All_Data()
         {
-            TransferFacade facade = new TransferFacade(GetServiceProvider().Object, _dbContext(GetCurrentMethod()));
-            TransferInStoreFacade facadestore = new TransferInStoreFacade(GetServiceProvider().Object, _dbContext(GetCurrentMethod()));
-            var model = await dataUtil(facade, GetCurrentMethod()).GetNewData();
-            await facadestore.Create(model, USERNAME);
-            var Response = facadestore.Read();
-            Assert.NotEmpty(Response.Item1);
+            DbSet<TransferInDoc> dbSet = _dbContext(GetCurrentMethod()).Set<TransferInDoc>();
+
+            dbSet.Add(this.TransInModel);
+            await _dbContext(GetCurrentMethod()).SaveChangesAsync();
+            TransferInStoreFacade facade = new TransferInStoreFacade(GetServiceProvider().Object, _dbContext(GetCurrentMethod()));
+
+            var Response = facade.Read();
+            Assert.NotEqual(null, Response);
         }
+
         [Fact]
         public async Task Should_Success_Get_Data_By_Id()
         {
             TransferFacade facade = new TransferFacade(GetServiceProvider().Object, _dbContext(GetCurrentMethod()));
             TransferInStoreFacade facadestore = new TransferInStoreFacade(GetServiceProvider().Object, _dbContext(GetCurrentMethod()));
-            var model = await dataUtil(facade, GetCurrentMethod()).GetNewData();
+            var model = await dataUtilTransfer(facade, GetCurrentMethod()).GetNewData();
             await facadestore.Create(model, USERNAME);
             var Response = facadestore.ReadById((int)model.Id);
             Assert.NotNull(Response);
+        }
+
+        [Fact]
+        public async Task Should_Success_Get_All_Data_Pending()
+        {
+            DbSet<SPKDocs> dbSetSpk = _dbContext(GetCurrentMethod()).Set<SPKDocs>();
+
+            dbSetSpk.Add(spkDocsModel);
+            await _dbContext(GetCurrentMethod()).SaveChangesAsync();
+            TransferInStoreFacade facade = new TransferInStoreFacade(GetServiceProvider().Object, _dbContext(GetCurrentMethod()));
+
+            var Response = facade.ReadPending();
+            Assert.NotEqual(null, Response);
         }
     }
 }

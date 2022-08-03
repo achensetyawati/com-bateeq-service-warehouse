@@ -18,7 +18,7 @@ namespace Com.Bateeq.Service.Warehouse.WebApi.Controllers.v1.Stores.TransferIn
 {
     [Produces("application/json")]
     [ApiVersion("1.0")]
-    [Route("v{version:apiVersion}/stores/efr-tb-bbt")]
+    [Route("v{version:apiVersion}/stores/btq-tb-bbt")]
     [Authorize]
     public class TransferInController : Controller
     {
@@ -138,6 +138,7 @@ namespace Com.Bateeq.Service.Warehouse.WebApi.Controllers.v1.Stores.TransferIn
                 return StatusCode(General.INTERNAL_ERROR_STATUS_CODE, Result);
             }
         }
+
         [HttpPost]
         public async Task<IActionResult> Post([FromBody]TransferInDocViewModel ViewModel)
         {
@@ -153,7 +154,6 @@ namespace Com.Bateeq.Service.Warehouse.WebApi.Controllers.v1.Stores.TransferIn
 
                 await facade.Create(model, identityService.Username);
 
-                // await facade.Crea
 
                 Dictionary<string, object> Result =
                     new ResultFormatter(ApiVersion, General.CREATED_STATUS_CODE, General.OK_MESSAGE)

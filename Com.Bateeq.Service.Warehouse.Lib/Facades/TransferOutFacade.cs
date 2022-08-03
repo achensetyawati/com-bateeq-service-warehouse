@@ -1,9 +1,11 @@
 ﻿using Com.Bateeq.Service.Warehouse.Lib.Helpers;
+using Com.Bateeq.Service.Warehouse.Lib.Interfaces;
 using Com.Bateeq.Service.Warehouse.Lib.Interfaces.TransferInterfaces;
 using Com.Bateeq.Service.Warehouse.Lib.Models.Expeditions;
 using Com.Bateeq.Service.Warehouse.Lib.Models.InventoryModel;
 using Com.Bateeq.Service.Warehouse.Lib.Models.SPKDocsModel;
 using Com.Bateeq.Service.Warehouse.Lib.Models.TransferModel;
+using Com.Bateeq.Service.Warehouse.Lib.ViewModels.NewIntegrationViewModel;
 using Com.Bateeq.Service.Warehouse.Lib.ViewModels.TransferViewModels;
 using Com.Moonlay.Models;
 using Com.Moonlay.NetCore.Lib;
@@ -16,6 +18,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -48,7 +51,7 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades
 
             List<string> searchAttributes = new List<string>()
             {
-                "Code"
+                "Code","SourceName","DestinationName"
             };
 
             Query = QueryHelper<TransferOutDoc>.ConfigureSearch(Query, searchAttributes, Keyword);
@@ -67,18 +70,18 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades
         }
         public Tuple<List<TransferOutReadViewModel>, int, Dictionary<string, string>> ReadForRetur(int Page = 1, int Size = 25, string Order = "{}", string Keyword = null, string Filter = "{}")
         {
-            IQueryable<TransferOutReadViewModel> Query = from a in dbContext.TransferOutDocs
+            IQueryable<TransferOutReadViewModel> Query = (from a in dbContext.TransferOutDocs
                                                          //join b in dbContext.TransferOutDocItems on a.Id equals b.TransferOutDocsId
                                                          //join c in dbContext.SPKDocs on a.Code equals c.Reference
                                                          //join d in dbContext.SPKDocsItems on c.Id equals d.SPKDocsId
                                                          join f in dbContext.ExpeditionItems on a.Code equals f.Reference
                                                          join g in dbContext.Expeditions on f.ExpeditionId equals g.Id
-                                                         where a.Code.Contains("EFR-KB/RTU")
+                                                         where a.Code.Contains("BTQ-KB/RTU")
                                                         select new TransferOutReadViewModel
                                                         {
                                                             _id = (int)a.Id,
                                                             code = a.Code,
-                                                            date = a.CreatedUtc,
+                                                            date = a.Date,
                                                             destination = new ViewModels.NewIntegrationViewModel.DestinationViewModel
                                                             {
                                                                 code = a.DestinationCode,
@@ -103,22 +106,29 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades
                                                             reference = a.Reference,
                                                             createdby = a.CreatedBy
                                                             
-                                                        };
+                                                        }).OrderByDescending(x => x.date);
 
-            //List<string> searchAttributes = new List<string>()
-            //{
-            //    "Code"
-            //};
+			IQueryable<TransferOutDoc> QueryDoc = this.dbSet.Include(m => m.Items);
 
-            //Query = QueryHelper<TransferOutDoc>.ConfigureSearch(Query, searchAttributes, Keyword);
+			List<string> searchAttributes = new List<string>()
+			{
+				"Code","SourceName","DestinationName"
+			};
 
-            //Dictionary<string, string> FilterDictionary = JsonConvert.DeserializeObject<Dictionary<string, string>>(Filter);
-            //Query = QueryHelper<TransferOutDoc>.ConfigureFilter(Query, FilterDictionary);
+			QueryDoc = QueryHelper<TransferOutDoc>.ConfigureSearch(QueryDoc, searchAttributes, Keyword);
+			List<long> listID = new List<long>();
+			foreach (var item in QueryDoc)
+			{
+				listID.Add(item.Id);
+			}
 
-            Dictionary<string, string> OrderDictionary = JsonConvert.DeserializeObject<Dictionary<string, string>>(Order);
-            //Query = QueryHelper<TransferOutDoc>.ConfigureOrder(Query, OrderDictionary);
+			Dictionary<string, string> OrderDictionary = JsonConvert.DeserializeObject<Dictionary<string, string>>(Order);
+			//Query = QueryHelper<TransferOutDoc>.ConfigureOrder(Query, OrderDictionary);
 
-            Pageable<TransferOutReadViewModel> pageable = new Pageable<TransferOutReadViewModel>(Query, Page - 1, Size);
+			Query = Query.Where(x => listID.Any(y => y == x._id));
+			Pageable<TransferOutReadViewModel> pageable = new Pageable<TransferOutReadViewModel>(Query, Page - 1, Size);
+
+			
             List<TransferOutReadViewModel> Data = pageable.Data.ToList();
             int TotalData = pageable.TotalCount;
 
@@ -142,7 +152,7 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades
             {
                 try
                 {
-                    string codeOut = GenerateCode("EFR-KB/RTU");
+                    string codeOut = GenerateCode("BTQ-KB/RTU");
                     model2.Code = codeOut;
                     model2.Date = DateTimeOffset.Now;
                     List<ExpeditionItem> expeditionItems = new List<ExpeditionItem>();
@@ -176,7 +186,7 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades
 
                     SPKDocs sPKDocs = new SPKDocs
                     {
-                        Code = GenerateCode("EFR-PK/PBJ"),
+                        Code = GenerateCode("BTQ-PK/PBJ"),
                         Date = DateTimeOffset.Now,
                         IsDistributed = true,
                         IsDraft = false,
@@ -184,7 +194,7 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades
                         DestinationCode = model2.DestinationCode,
                         DestinationId = model2.DestinationId,
                         DestinationName = model2.DestinationName,
-                        PackingList = GenerateCode("EFR-KB/PLR"),
+                        PackingList = GenerateCode("BTQ-KB/PLR"),
                         Password = String.Join("", GenerateCode(DateTime.Now.ToString("dd")).Split("/")),
                         Reference = codeOut,
                         SourceCode = model2.SourceCode,
@@ -280,7 +290,7 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades
 
                     Expedition expedition = new Expedition
                     {
-                        Code = GenerateCode("EFR-KB/EXP"),
+                        Code = GenerateCode("BTQ-KB/EXP"),
                         Date = DateTimeOffset.Now,
                         ExpeditionServiceCode = model.expeditionService.code,
                         ExpeditionServiceId = (int)model.expeditionService._id,
@@ -426,7 +436,7 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades
                     foreach (var i in model2.Items)
                     {
                         var inventorymovement = new InventoryMovement();
-                        var inven = dbContext.Inventories.Where(x => x.ItemId == i.ItemId && x.StorageId == model2.SourceId).FirstOrDefault();
+                        var inven = dbContext.Inventories.Where(x => x.ItemCode == i.ItemCode && x.StorageId == model2.SourceId).FirstOrDefault();
                         if (inven != null)
                         {
                             inventorymovement.Before = inven.Quantity;
@@ -459,7 +469,24 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades
                         dbSetInventoryMovement.Add(inventorymovement);
 
                         EntityExtension.FlagForCreate(i, username, USER_AGENT);
+
+                        //update TotalQty di tabel Items
+                        var existItemId = (int)i.ItemId;
+                        ItemCoreViewModelUsername itemCore = new ItemCoreViewModelUsername
+                        {
+                            _id = existItemId,
+                            Username = username,
+                            Token = "Bearer ",
+                            TotalQty = i.Quantity
+                        };
+
+                        string itemPutUri = $"items/finished-goods/reduce-qty-by-id/{i.ItemId}";
+                        IHttpClientService httpClient = (IHttpClientService)serviceProvider.GetService(typeof(IHttpClientService));
+                        var response = await httpClient.PutAsync($"{APIEndpoint.Core}{itemPutUri}", new StringContent(JsonConvert.SerializeObject(itemCore).ToString(), Encoding.UTF8, General.JsonMediaType));
+
+                        response.EnsureSuccessStatusCode();
                     }
+
                     dbSet.Add(model2);
                     Created = await dbContext.SaveChangesAsync();
                     transaction.Commit();

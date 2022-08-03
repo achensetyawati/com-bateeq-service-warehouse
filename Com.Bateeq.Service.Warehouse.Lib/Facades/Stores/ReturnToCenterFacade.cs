@@ -1,4 +1,5 @@
 ﻿using Com.Bateeq.Service.Warehouse.Lib.Helpers;
+using Com.Bateeq.Service.Warehouse.Lib.Interfaces.Stores.ReturnToCenterInterfaces;
 using Com.Bateeq.Service.Warehouse.Lib.Models.Expeditions;
 using Com.Bateeq.Service.Warehouse.Lib.Models.InventoryModel;
 using Com.Bateeq.Service.Warehouse.Lib.Models.SPKDocsModel;
@@ -20,8 +21,8 @@ using System.Threading.Tasks;
 
 namespace Com.Bateeq.Service.Warehouse.Lib.Facades.Stores
 {
-    public class ReturnToCenterFacade
-    {
+    public class ReturnToCenterFacade : IReturnToCenter
+	{
         private string USER_AGENT = "Facade";
 
         private readonly WarehouseDbContext dbContext;
@@ -43,18 +44,18 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades.Stores
 
         public Tuple<List<TransferOutReadViewModel>, int, Dictionary<string, string>> ReadForRetur(int Page = 1, int Size = 25, string Order = "{}", string Keyword = null, string Filter = "{}")
         {
-            IQueryable<TransferOutReadViewModel> Query = from a in dbContext.TransferOutDocs
+            IQueryable<TransferOutReadViewModel> Query = (from a in dbContext.TransferOutDocs
                                                          //join b in dbContext.TransferOutDocItems on a.Id equals b.TransferOutDocsId
                                                          //join c in dbContext.SPKDocs on a.Code equals c.Reference
                                                          //join d in dbContext.SPKDocsItems on c.Id equals d.SPKDocsId
                                                          join f in dbContext.ExpeditionItems on a.Code equals f.Reference
                                                          join g in dbContext.Expeditions on f.ExpeditionId equals g.Id
-                                                         where a.Code.Contains("EFR-KB/RTP")
+                                                         where a.Code.Contains("BTQ-KB/RTP")
                                                          select new TransferOutReadViewModel
                                                          {
                                                              _id = (int)a.Id,
                                                              code = a.Code,
-                                                             date = a.CreatedUtc,
+                                                             date = a.Date ,
                                                              destination = new ViewModels.NewIntegrationViewModel.DestinationViewModel
                                                              {
                                                                  code = a.DestinationCode,
@@ -79,12 +80,25 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades.Stores
                                                              reference = a.Reference,
                                                              createdby = a.CreatedBy
 
-                                                         };
+                                                         }).OrderByDescending(x => x.date);
+			IQueryable<TransferOutDoc> QueryDoc = this.dbSet.Include(m => m.Items).OrderByDescending(m => m.Date);
 
+			List<string> searchAttributes = new List<string>()
+			{
+				"Code","SourceName","DestinationName"
+			};
 
-            Dictionary<string, string> OrderDictionary = JsonConvert.DeserializeObject<Dictionary<string, string>>(Order);
+			QueryDoc = QueryHelper<TransferOutDoc>.ConfigureSearch(QueryDoc, searchAttributes, Keyword);
+			List<long> listID = new List<long>();
+			foreach(var item in QueryDoc)
+			{
+				listID.Add(item.Id);
+			}
+
+			Dictionary<string, string> OrderDictionary = JsonConvert.DeserializeObject<Dictionary<string, string>>(Order);
             //Query = QueryHelper<TransferOutDoc>.ConfigureOrder(Query, OrderDictionary);
 
+			Query = Query.Where(x => listID.Any(y => y == x._id));
             Pageable<TransferOutReadViewModel> pageable = new Pageable<TransferOutReadViewModel>(Query, Page - 1, Size);
             List<TransferOutReadViewModel> Data = pageable.Data.ToList();
             int TotalData = pageable.TotalCount;
@@ -110,7 +124,7 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades.Stores
             {
                 try
                 {
-                    string codeOut = GenerateCode("EFR-KB/RTP");
+                    string codeOut = GenerateCode("BTQ-KB/RTP");
                     model2.Code = codeOut;
                     model2.Date = DateTimeOffset.Now;
                     List<ExpeditionItem> expeditionItems = new List<ExpeditionItem>();
@@ -143,7 +157,7 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades.Stores
 
                     SPKDocs sPKDocs = new SPKDocs
                     {
-                        Code = GenerateCode("EFR-PK/PBJ"),
+                        Code = GenerateCode("BTQ-PK/PBJ"),
                         Date = DateTimeOffset.Now,
                         IsDistributed = true,
                         IsDraft = false,
@@ -151,7 +165,7 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades.Stores
                         DestinationCode = model2.DestinationCode,
                         DestinationId = model2.DestinationId,
                         DestinationName = model2.DestinationName,
-                        PackingList = GenerateCode("EFR-KB/PLR"),
+                        PackingList = GenerateCode("BTQ-KB/PLR"),
                         Password = String.Join("", GenerateCode(DateTime.Now.ToString("dd")).Split("/")),
                         Reference = codeOut,
                         SourceCode = model2.SourceCode,
@@ -247,7 +261,7 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades.Stores
 
                     Expedition expedition = new Expedition
                     {
-                        Code = GenerateCode("EFR-KB/EXP"),
+                        Code = GenerateCode("BTQ-KB/EXP"),
                         Date = DateTimeOffset.Now,
                         ExpeditionServiceCode = model.expeditionService.code,
                         ExpeditionServiceId = (int)model.expeditionService._id,

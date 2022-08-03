@@ -22,7 +22,7 @@ using System.Threading.Tasks;
 
 namespace Com.Bateeq.Service.Warehouse.Lib.Facades
 {
-    public class ExpeditionFacade
+    public class ExpeditionFacade 
     {
         private string USER_AGENT = "Facade";
 
@@ -85,13 +85,12 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades
                              && b.IsDeleted == false
                              && c.IsDeleted == false
                              && b.DestinationCode == (string.IsNullOrWhiteSpace(destinationCode) ? b.DestinationCode : destinationCode)
-                             && !b.Reference.Contains("RTT")
                              && a.CreatedBy == (string.IsNullOrWhiteSpace(username) ? a.CreatedBy : username)
                              // && a.Code == (string.IsNullOrWhiteSpace(code) ? a.Code : code)
                              && a.Date.AddHours(offset).Date >= DateFrom.Date
                              && a.Date.AddHours(offset).Date <= DateTo.Date
                              && b.IsReceived == status
-                             && (transaction == 0 ? b.SourceName.Contains("GUDANG") : !b.SourceName.Contains("GUDANG") && !b.Reference.Contains("RTP"))
+                             && (transaction == 0 ? (!b.Reference.Contains("BTQ-KB/RTP") && !b.Reference.Contains("BTQ-KB/RTU")) : (b.Reference.Contains("BTQ-KB/RTP") || b.Reference.Contains("BTQ-KB/RTU")))
                              && b.PackingList.Contains(string.IsNullOrWhiteSpace(packingList) ? b.PackingList : packingList)
 
                          select new ExpeditionReportViewModel
@@ -184,7 +183,7 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades
                     string date = item.date == null ? "-" : item.date.ToOffset(new TimeSpan(offset, 0, 0)).ToString("dd MMM yyyy", new CultureInfo("id-ID"));
                     //string prDate = item.expectedDeliveryDatePR == new DateTime(1970, 1, 1) ? "-" : item.expectedDeliveryDatePR.ToOffset(new TimeSpan(offset, 0, 0)).ToString("dd MMM yyyy", new CultureInfo("id-ID"));
                     //string epoDate = item.expectedDeliveryDatePO == new DateTime(1970, 1, 1) ? "-" : item.expectedDeliveryDatePO.ToOffset(new TimeSpan(offset, 0, 0)).ToString("dd MMM yyyy", new CultureInfo("id-ID"));
-                    result.Rows.Add(item.code, item.date, item.sourceName, item.destinationName, item.packingList, item.itemCode, item.itemName, item.itemSize, item.itemArticleRealizationOrder, item.itemUom, item.Quantity, item.isReceived);
+                    result.Rows.Add(item.date, item.code, item.sourceName, item.destinationName, item.packingList, item.itemCode, item.itemName, item.itemSize, item.itemArticleRealizationOrder, item.itemUom, item.Quantity, item.isReceived ? "Diterima" : "Belum Diterima");
                 }
             }
 
@@ -209,6 +208,7 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades
             string code = String.Format("{0}/{1}/{2}", hashids.Encode(diff), ModuleId, DateTime.Now.ToString("MM/yyyy"));
             return code;
         }
+
         public async Task<int> Create(Expedition model, string username, int clientTimeZoneOffset = 7)
         {
             int Created = 0;
@@ -218,16 +218,16 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades
                 try
                 {
                     int totalweight = 0;
-                    string code = GenerateCode("EFR-KB/EXP");
+                    string code = GenerateCode("BTQ-KB/EXP");
                     
                     model.Code = code;
                     model.Date = DateTimeOffset.Now;
-                    TransferOutDoc transferOutDoc = new TransferOutDoc();
                     foreach (var i in model.Items)
                     {
+                        TransferOutDoc transferOutDoc = new TransferOutDoc();
                         i.Id = 0;
                         totalweight += i.Weight;
-                        string CodeTransferOut = GenerateCode("EFR-KB/EXP");
+                        string CodeTransferOut = GenerateCode("BTQ-KB/EXP");
                         var SPK = dbContext.SPKDocs.Where(x => x.PackingList == i.PackingList).Single();
                         SPK.IsDistributed = true;
                         transferOutDoc.Code = CodeTransferOut;
@@ -244,9 +244,9 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades
                         {
                             d.Id = 0;
                             var inven = dbContext.Inventories.Where(x => x.ItemArticleRealizationOrder == d.ArticleRealizationOrder && x.ItemCode == d.ItemCode && x.ItemName == d.ItemName && x.StorageId == i.SourceId).Single();
-                            //inven.Quantity = inven.Quantity - d.SendQuantity;
-                            
-                            InventoryMovement movement = new InventoryMovement { 
+
+                            InventoryMovement movement = new InventoryMovement
+                            {
                                 After = inven.Quantity - d.SendQuantity,
                                 Before = inven.Quantity,
                                 Date = DateTimeOffset.Now,
@@ -289,7 +289,6 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades
                                 Size = d.Size,
                                 Uom = d.Uom
                             };
-                            EntityExtension.FlagForCreate(transferItem, username, USER_AGENT);
                             transferOutDocItems.Add(transferItem);
                             //transferOutDoc.Items.Add(transferItem);
                             //transferOutDoc.Items.Add(new TransferOutDocItem
@@ -313,11 +312,17 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades
                             EntityExtension.FlagForCreate(movement, username, USER_AGENT);
                             this.dbSetInventoryMovement.Add(movement);
                         }
-                        transferOutDoc.Items = transferOutDocItems;
-                        EntityExtension.FlagForCreate(i, username, USER_AGENT);
                         EntityExtension.FlagForCreate(transferOutDoc, username, USER_AGENT);
                         this.dbSetTransfer.Add(transferOutDoc);
-                        
+
+                        transferOutDoc.Items = transferOutDocItems;
+                        foreach (var trfOut in transferOutDocItems)
+                        {
+                            EntityExtension.FlagForCreate(trfOut, username, USER_AGENT);
+                        }
+
+                        EntityExtension.FlagForCreate(i, username, USER_AGENT);
+
                     }
                     model.Weight = totalweight;
                     model.Remark = "";

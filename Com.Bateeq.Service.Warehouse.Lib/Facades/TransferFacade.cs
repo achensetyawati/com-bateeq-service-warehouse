@@ -38,11 +38,12 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades
 
         public Tuple<List<TransferInDoc>, int, Dictionary<string, string>> Read(int Page = 1, int Size = 25, string Order = "{}", string Keyword = null, string Filter = "{}")
         {
-            IQueryable<TransferInDoc> Query = this.dbSet.Include(m => m.Items);
+            //IQueryable<TransferInDoc> Query = this.dbSet.Include(m => m.Items).Where(m => m.Reference.Contains("BTQ-FN"));
+            IQueryable<TransferInDoc> Query = this.dbSet.Include(m => m.Items).OrderByDescending(x => x.Date);
 
             List<string> searchAttributes = new List<string>()
             {
-                "Code"
+                "Code","DestinationName","SourceName","Reference"
             };
 
             Query = QueryHelper<TransferInDoc>.ConfigureSearch(Query, searchAttributes, Keyword);
@@ -84,11 +85,11 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades
             {
                 try
                 {
-                    string code = GenerateCode("EFR-TB/BBP");
+                    string code = GenerateCode("BTQ-TB/BBP");
                     model.Code = code;
 
 
-                    var SPK = dbContext.SPKDocs.Where(x => x.PackingList == model.Reference).Single();
+                    var SPK = dbContext.SPKDocs.Where(x => x.PackingList == model.Reference).FirstOrDefault();
                     var expedition = dbContext.ExpeditionItems.Where(x => x.PackingList == model.Reference);
                     if (expedition.Count() != 0)
                     {
@@ -97,26 +98,75 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades
                     SPK.IsReceived = true;
                     var Id = SPK.Id;
                     EntityExtension.FlagForCreate(model, username, USER_AGENT);
+
+                    var newItems = new List<TransferInDocItem>();
+
                     foreach (var i in model.Items)
                     {
-                        i.Id = 0;
-                        EntityExtension.FlagForCreate(i, username, USER_AGENT);
                         var SPKItems = dbContext.SPKDocsItems.Where(x => x.ItemArticleRealizationOrder == i.ArticleRealizationOrder && x.ItemCode == i.ItemCode && i.ItemName == i.ItemName && x.SPKDocsId == Id).Single();
                         SPKItems.SendQuantity = i.Quantity;
+
+                        //int status = 0;
+                        //if (inven != null)
+                        //{
+                        //    var latestItemCode = inven.ItemCode;
+                        //    var latestItemCodeLength = latestItemCode.Length;
+                        //    var latestStatus = latestItemCode.Substring(latestItemCodeLength - 2);
+                        //    status = int.Parse(latestStatus);
+                        //}
+                        //var countLoop = i.Quantity;
+                        //for (var j = 0; j < countLoop; j++)
+                        //{
+                        //    status = status + 1;
+
+                        //    i.Id = 0;
+                        //    i.Quantity = 1;
+                        //    i.ItemCode = "" + itemcode + status.ToString("00");
+
                         var inventorymovement = new InventoryMovement();
-                        var inven = dbContext.Inventories.Where(x => x.ItemId == i.ItemId && x.StorageId == model.DestinationId).FirstOrDefault();
-                        if (inven != null)
+
+                        var inven = dbContext.Inventories.OrderByDescending(x => x.CreatedUtc).Where(x => x.ItemId == i.ItemId && x.ItemCode.Contains(i.ItemCode)).FirstOrDefault();
+                        var itemcode = i.ItemCode;
+
+                        TransferInDocItem transferInDocItem = new TransferInDocItem
                         {
-                            inventorymovement.Before = inven.Quantity;
-                            inven.Quantity = inven.Quantity + i.Quantity ;//inven.Quantity + i.quantity;
-                            //dbSetInventory.Update(inven);
+                            ArticleRealizationOrder = i.ArticleRealizationOrder,
+                            DomesticCOGS = i.DomesticCOGS,
+                            DomesticRetail = i.DomesticRetail,
+                            DomesticSale = i.DomesticSale,
+                            DomesticWholeSale = i.DomesticWholeSale,
+                            ItemCode = itemcode,
+                            ItemId = i.ItemId,
+                            ItemName = i.ItemName,
+                            Quantity = i.Quantity,
+                            Remark = i.Remark,
+                            Size = i.Size,
+                            TransferDocsId = i.TransferDocsId,
+                            TransferInDocs = i.TransferInDocs,
+                            Uom = i.Uom,
+                            Id = 0
+                        };
+
+                        EntityExtension.FlagForCreate(transferInDocItem, username, USER_AGENT);
+                        newItems.Add(transferInDocItem);
+
+                        var source = 0.0;
+                        var invenExist = dbSetInventory.Where(a => a.ItemCode == itemcode && a.StorageId == model.DestinationId).FirstOrDefault();
+
+                        if (invenExist !=null)
+                        {
+                            source = invenExist.Quantity;
+
+                            invenExist.Quantity += i.Quantity;
+                            EntityExtension.FlagForUpdate(invenExist, username, USER_AGENT);
+                            //dbSetInventory.Add(invenExist);
                         }
                         else
                         {
                             Inventory inventory = new Inventory
                             {
                                 ItemArticleRealizationOrder = i.ArticleRealizationOrder,
-                                ItemCode = i.ItemCode,
+                                ItemCode = itemcode,
                                 ItemDomesticCOGS = i.DomesticCOGS,
                                 ItemDomesticRetail = i.DomesticRetail,
                                 ItemDomesticSale = i.DomesticSale,
@@ -139,9 +189,10 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades
                             dbSetInventory.Add(inventory);
                         }
 
+                        inventorymovement.Before = source;
                         inventorymovement.After = inventorymovement.Before + i.Quantity;
                         inventorymovement.Date = DateTimeOffset.UtcNow;
-                        inventorymovement.ItemCode = i.ItemCode;
+                        inventorymovement.ItemCode = itemcode ;
                         inventorymovement.ItemDomesticCOGS = i.DomesticCOGS;
                         inventorymovement.ItemDomesticRetail = i.DomesticRetail;
                         inventorymovement.ItemDomesticWholeSale = i.DomesticRetail;
@@ -164,9 +215,9 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Facades
                         inventorymovement.StorageIsCentral = model.DestinationName.Contains("GUDANG") ? true : false;
                         EntityExtension.FlagForCreate(inventorymovement, username, USER_AGENT);
                         dbSetInventoryMovement.Add(inventorymovement);
-
                     }
-
+                    
+                    model.Items = newItems;
                     dbSet.Add(model);
                     Created = await dbContext.SaveChangesAsync();
                     transaction.Commit();

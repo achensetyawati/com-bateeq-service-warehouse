@@ -48,6 +48,7 @@ using Com.Bateeq.Service.Warehouse.Lib.Interfaces.PkbjInterfaces;
 using Com.Bateeq.Service.Warehouse.Lib.Facades.AdjustmentFacade;
 using Com.Bateeq.Service.Warehouse.Lib.Interfaces.AdjustmentInterfaces;
 using Com.Bateeq.Service.Warehouse.Lib.Interfaces.SOInterfaces;
+using Com.Bateeq.Service.Warehouse.Lib.Interfaces.InventoryLoaderInterfaces;
 //using Com.DanLiris.Service.Purchasing.Lib.Facades.PRMasterValidationReportFacade;
 //using Com.DanLiris.Service.Purchasing.Lib.Facades.GarmentExternalPurchaseOrderFacades.Reports;
 //using Com.DanLiris.Service.Purchasing.Lib.Facades.GarmentSupplierBalanceDebtFacades;
@@ -80,6 +81,7 @@ namespace Com.Bateeq.Service.Warehouse.WebApi
             APIEndpoint.Sales = Configuration.GetValue<string>(Constant.SALES_ENDPOINT) ?? Configuration[Constant.SALES_ENDPOINT];
             APIEndpoint.Auth = Configuration.GetValue<string>(Constant.AUTH_ENDPOINT) ?? Configuration[Constant.AUTH_ENDPOINT];
             APIEndpoint.GarmentProduction = Configuration.GetValue<string>(Constant.GARMENT_PRODUCTION_ENDPOINT) ?? Configuration[Constant.GARMENT_PRODUCTION_ENDPOINT];
+            APIEndpoint.POS = Configuration.GetValue<string>(Constant.POS_ENDPOINT) ?? Configuration[Constant.POS_ENDPOINT];
 
             AuthCredential.Username = Configuration.GetValue<string>(Constant.USERNAME) ?? Configuration[Constant.USERNAME];
             AuthCredential.Password = Configuration.GetValue<string>(Constant.PASSWORD) ?? Configuration[Constant.PASSWORD];
@@ -101,8 +103,9 @@ namespace Com.Bateeq.Service.Warehouse.WebApi
                 .AddTransient<TransferStockFacade>()
                 .AddTransient<IAdjustmentDoc, AdjustmentFacade>()
                 .AddTransient<ISODoc, SOFacade>()
-                .AddTransient<SPKDocsFacade>(); ;
-                
+                .AddTransient<SPKDocsFacade>()
+                .AddTransient<ISPKDoc, SPKDocsControllerFacade>()
+                .AddTransient<IInventoryLoader, InventoryLoaderFacade>();
         }
 
         private void AddTransient<T>()

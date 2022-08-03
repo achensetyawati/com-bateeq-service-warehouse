@@ -45,11 +45,11 @@ namespace Com.Bateeq.Service.Warehouse.Lib.ViewModels.AdjustmentDocsViewModel
                     }
                     else
                     {
-                        var itemsExist = items.Where(i => i.item._id != 0 && item.item._id != 0 && i.item._id.Equals(item.item._id)).Count();
+                        var itemsExist = items.Where(i => i.item._id != 0 && i.item._id.Equals(item.item._id)).Count();
                         if (itemsExist > 1)
                         {
                             itemErrorCount++;
-                            itemError += "Item: 'Item is duplicate', ";
+                            itemError += "name: 'Item is duplicate', ";
                         }
                     }
 
@@ -64,13 +64,13 @@ namespace Com.Bateeq.Service.Warehouse.Lib.ViewModels.AdjustmentDocsViewModel
                     if (item.qtyAdjustment == 0)
                     {
                         itemErrorCount++;
-                        itemError += "Item: 'Adjustment quantity must be greater than 0', ";
+                        itemError += "qtyAdjustment: 'Adjustment quantity must be greater than 0', ";
                     }
 
                     if (string.IsNullOrWhiteSpace(item.remark))
                     {
                         itemErrorCount++;
-                        itemError += "Item: 'Remark cant be null ', ";
+                        itemError += "remark: 'Remark cant be null ', ";
                     }
 
                     itemError += "}, ";

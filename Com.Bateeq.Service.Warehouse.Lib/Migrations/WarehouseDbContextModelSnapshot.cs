@@ -800,6 +800,9 @@ namespace Com.Bateeq.Service.Warehouse.Lib.Migrations
                     b.Property<string>("DestinationName")
                         .HasMaxLength(1000);
 
+                    b.Property<string>("FinishingOutIdentity")
+                        .HasMaxLength(255);
+
                     b.Property<bool>("IsDeleted");
 
                     b.Property<bool>("IsDistributed");

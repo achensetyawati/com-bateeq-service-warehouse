@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using Com.Bateeq.Service.Warehouse.Lib.Facades.Stores;
 using Com.Bateeq.Service.Warehouse.Lib.Interfaces;
+using Com.Bateeq.Service.Warehouse.Lib.Interfaces.Stores.TransferStocksInterfaces;
 using Com.Bateeq.Service.Warehouse.Lib.Models.TransferModel;
 using Com.Bateeq.Service.Warehouse.Lib.Services;
 using Com.Bateeq.Service.Warehouse.Lib.ViewModels.TransferViewModels;
@@ -17,7 +18,7 @@ namespace Com.Bateeq.Service.Warehouse.WebApi.Controllers.v1.Stores.TransferStoc
 {
     [Produces("application/json")]
     [ApiVersion("1.0")]
-    [Route("v{version:apiVersion}/stores/efr-kb-rtt")]
+    [Route("v{version:apiVersion}/stores/btq-kb-rtt")]
     [Authorize]
     public class TransferStockController : Controller
     {
@@ -149,7 +150,7 @@ namespace Com.Bateeq.Service.Warehouse.WebApi.Controllers.v1.Stores.TransferStoc
 
                 var model = mapper.Map<TransferOutDoc>(ViewModel);
 
-                await facade.Create(ViewModel,model, identityService.Username);
+                await facade.Create(ViewModel, model, identityService.Username);
 
                 // await facade.Crea
 
